@@ -1,0 +1,132 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```
+library(topicmodels)
+library(lda)
+library(slam)
+library(stm)
+library(ggplot2)
+library(dplyr)
+library(tidytext)
+library(furrr) # try to make it faster
+plan(multicore)
+library(tm) # Framework for text mining
+library(tidyverse) # Data preparation and pipes %>%
+library(ggplot2) # For plotting word frequencies
+library(wordcloud) # Wordclouds!
+library(Rtsne)
+library(rsvd)
+library(geometry)
+library(NLP)
+library(ldatuning)
+
+# Clear up data in global environment
+rm(list=ls())
+
+# Load data from csv file
+fdf <- read.csv("C:\\Users\\viole\\Desktop\\Datasets\\final_scraped_data.csv")
+
+# Check for NAs
+sapply(fdf, function(x) sum(is.na(x)))
+
+# Overview of original dataset
+str(fdf)
+sapply(fdf, typeof)
+
+set.seed(830)
+f_sample <- fdf[sample(nrow(fdf), 1000), c("Data.source", "Ganesha.idol.type", "Comment")]
+
+f_sample$Ganesha.idol.type <- as.factor(f_sample$Ganesha.idol.type)
+f_sample$Data.source <- as.factor(f_sample$Data.source)
+
+sapply(f_sample, typeof)
+
+library(stm)
+
+processed <- textProcessor(f_sample$Comment, metadata = f_sample,
+                           lowercase = TRUE, #*
+                           removestopwords = TRUE, #*
+                           removenumbers = TRUE, #*
+                           removepunctuation = TRUE, #*
+                           stem = TRUE, #*
+                           wordLengths = c(3,Inf), #*
+                           sparselevel = 1, #*
+                           language = "en", #*
+                           verbose = TRUE, #*
+                           onlycharacter = TRUE, # not def
+                           striphtml = FALSE, #*
+                           customstopwords = NULL, #*
+                           v1 = FALSE) #*
+                           
+out <- prepDocuments(processed$documents, processed$vocab, processed$meta, lower.thresh=10)   
+
+docs <- out$documents
+vocab <- out$vocab
+meta <-out$meta
+
+levels(meta$Data.source)
+levels(meta$Ganesha.idol.type)
+
+set.seed(831)
+system.time({
+First_STM <- stm(docs, vocab, 5,
+                 prevalence =~ Data.source + Ganesha.idol.type,
+                 data = meta,
+                 seed = 15, max.em.its = 5
+)
+})
+
+plot(First_STM)
+
+set.seed(832)
+system.time({
+Second_STM <- stm(documents = out$documents, vocab = out$vocab,
+                 K = 5, prevalence =~ Data.source + Ganesha.idol.type,
+                 max.em.its = 75, data = out$meta,
+                 init.type = "Spectral", verbose = FALSE
+)
+})
+
+# Plot second Topic Model
+plot(Second_STM)
+
+# Find k: Approach 1 
+set.seed(834)
+system.time({
+    findingk_ver2 <- searchK(documents = out$documents, 
+                                  vocab = out$vocab,
+                                  K = c(10,20,30,40,50,60, 70), #specify K to try
+                                  N = 500, # matches 10% default
+                                  proportion = 0.5, # default
+                                  heldout.seed = 1234, # optional
+                                  M = 10, # default
+                                  cores = 1, # default=1
+                                  prevalence =~ Data.source + Ganesha.idol.type,
+                                  max.em.its = 75, #was 75
+                                  data = meta,
+                                  init.type = "Spectral",
+                                  verbose=TRUE
+    )
+})
+
+# Plot
+plot(findingk_ver2)
+
+```
